@@ -1,0 +1,53 @@
+# Test configuration for quick verification
+# This configuration uses CPU and a small subset of data
+
+# Data settings
+data:
+  data_dir: "ISBI_2015/training"
+  use_preprocessed: true
+  normalize: true
+  augmentation: false  # Disable augmentation for faster testing
+  target_size: [64, 64, 64]  # Smaller size for faster processing
+  modalities: ["flair", "mprage", "pd", "t2"]
+  batch_size: 1  # Small batch size for CPU
+  num_workers: 0  # No multiprocessing for testing
+  train_split: 0.8
+  max_samples: 4  # Limit number of samples for quick test
+
+# Model settings
+model:
+  config_path: "config/test_model_config.yaml"
+
+# Training settings
+training:
+  num_epochs: 2  # Just 2 epochs for quick test
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  optimizer: "adamw"
+  scheduler: "cosine"
+  scheduler_params:
+    T_max: 2
+    eta_min: 0.00001
+  early_stopping_patience: 10
+
+# Loss function settings
+loss:
+  type: "combined"
+  dice_weight: 0.5
+  bce_weight: 0.5
+  smooth: 1e-5
+
+# Output settings
+output:
+  output_dir: "outputs/test_run"
+  save_best: false  # Don't save for test
+  save_checkpoints: false
+
+# Device settings - FORCE CPU for testing
+device: "cpu"
+
+# Logging
+logging:
+  use_tensorboard: false  # Disable tensorboard for test
+  log_interval: 1
+
