@@ -113,35 +113,54 @@ class RandomScaling:
             return data
         
         scale = np.random.uniform(self.scale_range[0], self.scale_range[1])
+        original_shape = data.shape
         
         from scipy.ndimage import zoom
         zoom_factors = [scale] * len(data.shape)
         scaled = zoom(data, zoom_factors, order=3, mode='nearest')
         
-        # Crop or pad to original size
-        if scaled.shape != data.shape:
-            # Center crop or pad
+        # Ensure output has exact original shape
+        if scaled.shape != original_shape:
+            # Calculate padding needed for each dimension
+            padding = []
             slices = []
-            for i, (orig, scaled_dim) in enumerate(zip(data.shape, scaled.shape)):
-                if scaled_dim > orig:
-                    start = (scaled_dim - orig) // 2
-                    slices.append(slice(start, start + orig))
-                else:
-                    slices.append(slice(0, scaled_dim))
             
+            for orig_dim, scaled_dim in zip(original_shape, scaled.shape):
+                if scaled_dim >= orig_dim:
+                    # Crop from center
+                    start = (scaled_dim - orig_dim) // 2
+                    slices.append(slice(start, start + orig_dim))
+                    padding.append((0, 0))
+                else:
+                    # Will pad
+                    slices.append(slice(0, scaled_dim))
+                    pad_before = (orig_dim - scaled_dim) // 2
+                    pad_after = orig_dim - scaled_dim - pad_before
+                    padding.append((pad_before, pad_after))
+            
+            # First crop if needed
             if any(s.stop > scaled.shape[i] for i, s in enumerate(slices)):
-                # Need to pad
-                padding = []
-                for i, (orig, scaled_dim) in enumerate(zip(data.shape, scaled.shape)):
-                    if scaled_dim < orig:
-                        pad_before = (orig - scaled_dim) // 2
-                        pad_after = orig - scaled_dim - pad_before
-                        padding.append((pad_before, pad_after))
+                # All dimensions need cropping, so just take slices
+                scaled = scaled[tuple(slices)]
+            else:
+                # Some dimensions might need cropping
+                temp_slices = []
+                for i, s in enumerate(slices):
+                    if s.stop <= scaled.shape[i]:
+                        temp_slices.append(s)
                     else:
-                        padding.append((0, 0))
+                        temp_slices.append(slice(0, scaled.shape[i]))
+                scaled = scaled[tuple(temp_slices)]
+            
+            # Then pad if needed
+            if any(p[0] > 0 or p[1] > 0 for p in padding):
                 scaled = np.pad(scaled, padding, mode='constant', constant_values=0)
             
-            scaled = scaled[tuple(slices) if len(slices) == len(data.shape) else ...]
+            # Final safety check: ensure exact shape match
+            if scaled.shape != original_shape:
+                # Force to original shape by cropping
+                final_slices = tuple(slice(0, orig_dim) for orig_dim in original_shape)
+                scaled = scaled[final_slices]
         
         return scaled.astype(data.dtype)
 

@@ -149,10 +149,79 @@ class MSLesionDataset(Dataset):
         if self.augmentation and self.augment is not None and mask is not None:
             # Apply same augmentation to image and mask
             # Note: Augmentation expects (H, W, D) format
+            # Store original shape to ensure consistency
+            original_shape = image.shape[1:]  # (H, W, D)
+            
+            # Apply augmentation to each channel separately
+            # Note: Each channel will get different random parameters, but shapes should match
             augmented_channels = []
+            aug_mask = None
+            
             for c in range(image.shape[0]):
                 aug_img, aug_mask = self.augment(image[c], mask[0])
+                
+                # Ensure output shape matches original shape (safety check)
+                if aug_img.shape != original_shape:
+                    # Force to original shape
+                    if aug_img.shape != original_shape:
+                        # Crop or pad to match
+                        padding = []
+                        slices = []
+                        for orig_dim, aug_dim in zip(original_shape, aug_img.shape):
+                            if aug_dim >= orig_dim:
+                                start = (aug_dim - orig_dim) // 2
+                                slices.append(slice(start, start + orig_dim))
+                                padding.append((0, 0))
+                            else:
+                                slices.append(slice(0, aug_dim))
+                                pad_before = (orig_dim - aug_dim) // 2
+                                pad_after = orig_dim - aug_dim - pad_before
+                                padding.append((pad_before, pad_after))
+                        
+                        # Apply cropping
+                        aug_img = aug_img[tuple(slices)]
+                        
+                        # Apply padding if needed
+                        if any(p[0] > 0 or p[1] > 0 for p in padding):
+                            aug_img = np.pad(aug_img, padding, mode='constant', constant_values=0)
+                        
+                        # Final safety crop
+                        if aug_img.shape != original_shape:
+                            final_slices = tuple(slice(0, orig_dim) for orig_dim in original_shape)
+                            aug_img = aug_img[final_slices]
+                
                 augmented_channels.append(aug_img)
+            
+            # Ensure mask shape matches
+            if aug_mask is not None and aug_mask.shape != original_shape:
+                # Force mask to original shape
+                padding = []
+                slices = []
+                for orig_dim, aug_dim in zip(original_shape, aug_mask.shape):
+                    if aug_dim >= orig_dim:
+                        start = (aug_dim - orig_dim) // 2
+                        slices.append(slice(start, start + orig_dim))
+                        padding.append((0, 0))
+                    else:
+                        slices.append(slice(0, aug_dim))
+                        pad_before = (orig_dim - aug_dim) // 2
+                        pad_after = orig_dim - aug_dim - pad_before
+                        padding.append((pad_before, pad_after))
+                
+                aug_mask = aug_mask[tuple(slices)]
+                if any(p[0] > 0 or p[1] > 0 for p in padding):
+                    aug_mask = np.pad(aug_mask, padding, mode='constant', constant_values=0)
+                if aug_mask.shape != original_shape:
+                    final_slices = tuple(slice(0, orig_dim) for orig_dim in original_shape)
+                    aug_mask = aug_mask[final_slices]
+            
+            # Verify all channels have same shape before stacking
+            shapes = [ch.shape for ch in augmented_channels]
+            if len(set(shapes)) > 1:
+                # Force all to same shape (original_shape)
+                augmented_channels = [ch[tuple(slice(0, orig_dim) for orig_dim in original_shape)] 
+                                     for ch in augmented_channels]
+            
             image = np.stack(augmented_channels, axis=0)
             mask = np.expand_dims(aug_mask, axis=0)
         

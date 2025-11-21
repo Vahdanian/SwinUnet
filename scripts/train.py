@@ -61,11 +61,21 @@ def create_data_loaders(config: dict):
     # Disable pin_memory for CPU testing
     pin_memory = config.get('device', 'cuda') == 'cuda'
     
+    # Cap num_workers to avoid warnings (max 2 workers recommended on some systems)
+    num_workers = config['data']['num_workers']
+    if num_workers > 0:
+        import os
+        # Use min of configured workers and system CPU count, but cap at reasonable max
+        max_recommended = min(2, os.cpu_count() or 1)
+        if num_workers > max_recommended:
+            print(f"Warning: Reducing num_workers from {num_workers} to {max_recommended} to avoid potential issues")
+            num_workers = max_recommended
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=config['data']['batch_size'],
         shuffle=True,
-        num_workers=config['data']['num_workers'],
+        num_workers=num_workers,
         pin_memory=pin_memory
     )
     
@@ -73,7 +83,7 @@ def create_data_loaders(config: dict):
         val_dataset,
         batch_size=config['data']['batch_size'],
         shuffle=False,
-        num_workers=config['data']['num_workers'],
+        num_workers=num_workers,
         pin_memory=pin_memory
     )
     
