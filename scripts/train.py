@@ -226,6 +226,7 @@ def main():
         device=device,
         output_dir=config['output']['output_dir'],
         save_best=config['output']['save_best'],
+        save_checkpoints=config['output'].get('save_checkpoints', True),
         early_stopping_patience=config['training']['early_stopping_patience']
     )
     

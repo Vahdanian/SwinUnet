@@ -91,8 +91,7 @@ def get_scheduler(
             optimizer,
             mode=mode,
             factor=factor,
-            patience=patience,
-            verbose=True
+            patience=patience
         )
     elif scheduler_type.lower() == "step":
         step_size = kwargs.get("step_size", 30)

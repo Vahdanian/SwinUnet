@@ -32,6 +32,7 @@ class Trainer:
         device: str = "cuda",
         output_dir: str = "outputs",
         save_best: bool = True,
+        save_checkpoints: bool = True,
         early_stopping_patience: int = 10
     ):
         """
@@ -53,6 +54,7 @@ class Trainer:
         self.device = device
         self.output_dir = output_dir
         self.save_best = save_best
+        self.save_checkpoints = save_checkpoints
         self.early_stopping_patience = early_stopping_patience
         
         # Setup optimizer
@@ -217,7 +219,8 @@ class Trainer:
             print(f"Learning Rate: {current_lr:.6f}")
             
             # Save checkpoint
-            self.save_checkpoint(epoch, val_metrics.get('dice', train_metrics['dice']))
+            if self.save_checkpoints:
+                self.save_checkpoint(epoch, val_metrics.get('dice', train_metrics['dice']))
             
             # Early stopping
             if self.val_loader is not None:
@@ -235,7 +238,7 @@ class Trainer:
                     break
         
         # Save best model
-        if self.best_model_state is not None:
+        if self.save_best and self.best_model_state is not None:
             best_model_path = os.path.join(self.output_dir, 'best_model.pth')
             torch.save({
                 'epoch': epoch,
