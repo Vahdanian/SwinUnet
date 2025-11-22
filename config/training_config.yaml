@@ -18,15 +18,15 @@ model:
 
 # Training settings
 training:
-  num_epochs: 100
-  learning_rate: 0.0001
+  num_epochs: 300
+  learning_rate: 0.001
   weight_decay: 0.0001
   optimizer: "adamw"  # "adamw", "adam", or "sgd"
-  scheduler: "cosine"  # "cosine", "plateau", or "step"
+  scheduler: "plateau"  # "cosine", "plateau", or "step"
   scheduler_params:
-    T_max: 100  # For cosine annealing
-    eta_min: 0.00001
-  early_stopping_patience: 10
+    factor: 0.9
+    patience: 10
+  early_stopping_patience: 25
 
 # Loss function settings
 loss:
