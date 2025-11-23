@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.models import SwinUNETR
 from src.data import MSLesionDataset
-from src.training import Trainer, CombinedLoss, DiceLoss, get_optimizer, get_scheduler
+from src.training import Trainer, CombinedLoss, DiceLoss, EnhancedCombinedLoss, get_optimizer, get_scheduler
 
 
 def load_config(config_path: str) -> dict:
@@ -96,19 +96,50 @@ def create_model(config: dict) -> torch.nn.Module:
     model_config = load_config(model_config_path)
     
     model_params = model_config['model']
+    swin_params = model_config.get('swin', {})
+    
     model = SwinUNETR(
         in_channels=model_params['in_channels'],
         out_channels=model_params['out_channels'],
         img_size=tuple(model_params['img_size']),
         feature_size=model_params['feature_size'],
         use_attention=model_params['use_attention'],
-        attention_type=model_params.get('attention_type', 'cbam')
+        attention_type=model_params.get('attention_type', 'cbam'),
+        drop_rate=swin_params.get('drop_rate', 0.1),
+        attn_drop_rate=swin_params.get('attn_drop_rate', 0.1),
+        dropout_path_rate=swin_params.get('dropout_path_rate', 0.1)
     )
     
     return model
 
 
-def create_loss_function(config: dict) -> torch.nn.Module:
+def compute_class_weights(dataset, device='cpu'):
+    """
+    Compute class weights for imbalanced data.
+    Returns pos_weight for BCE loss.
+    """
+    total_pixels = 0
+    positive_pixels = 0
+    
+    print("Computing class weights from dataset...")
+    for i in range(min(len(dataset), 100)):  # Sample up to 100 samples
+        sample = dataset[i]
+        if sample['mask'] is not None:
+            mask = sample['mask']
+            total_pixels += mask.numel()
+            positive_pixels += mask.sum().item()
+    
+    if positive_pixels > 0 and total_pixels > positive_pixels:
+        neg_pixels = total_pixels - positive_pixels
+        pos_weight = torch.tensor(neg_pixels / positive_pixels, device=device)
+        print(f"Class weights computed: pos_weight={pos_weight.item():.4f}")
+        return pos_weight
+    else:
+        print("Using default class weights")
+        return None
+
+
+def create_loss_function(config: dict, pos_weight: torch.Tensor = None) -> torch.nn.Module:
     """Create loss function from configuration."""
     loss_config = config['loss']
     loss_type = loss_config['type']
@@ -120,7 +151,21 @@ def create_loss_function(config: dict) -> torch.nn.Module:
         return CombinedLoss(
             dice_weight=float(loss_config.get('dice_weight', 0.5)),
             bce_weight=float(loss_config.get('bce_weight', 0.5)),
-            smooth=float(loss_config.get('smooth', 1e-5))
+            smooth=float(loss_config.get('smooth', 1e-5)),
+            pos_weight=pos_weight
+        )
+    elif loss_type == 'enhanced':
+        return EnhancedCombinedLoss(
+            dice_weight=float(loss_config.get('dice_weight', 0.3)),
+            tversky_weight=float(loss_config.get('tversky_weight', 0.3)),
+            bce_weight=float(loss_config.get('bce_weight', 0.2)),
+            focal_weight=float(loss_config.get('focal_weight', 0.2)),
+            smooth=float(loss_config.get('smooth', 1e-5)),
+            tversky_alpha=float(loss_config.get('tversky_alpha', 0.7)),
+            tversky_beta=float(loss_config.get('tversky_beta', 0.3)),
+            focal_alpha=float(loss_config.get('focal_alpha', 0.25)),
+            focal_gamma=float(loss_config.get('focal_gamma', 2.0)),
+            pos_weight=pos_weight
         )
     else:
         raise ValueError(f"Unknown loss type: {loss_type}")
@@ -196,8 +241,22 @@ def main():
     print(f"Total parameters: {total_params:,}")
     print(f"Trainable parameters: {trainable_params:,}")
     
+    # Compute class weights for imbalanced data
+    pos_weight = None
+    if config['loss'].get('compute_class_weights', False):
+        # Create a temporary dataset to compute weights
+        temp_dataset = MSLesionDataset(
+            data_dir=config['data']['data_dir'],
+            use_preprocessed=config['data']['use_preprocessed'],
+            normalize=config['data']['normalize'],
+            augmentation=False,  # No augmentation for weight computation
+            target_size=tuple(config['data']['target_size']) if config['data'].get('target_size') else None,
+            modalities=config['data']['modalities']
+        )
+        pos_weight = compute_class_weights(temp_dataset, device=device)
+    
     # Create loss function
-    criterion = create_loss_function(config)
+    criterion = create_loss_function(config, pos_weight=pos_weight)
     
     # Create optimizer
     optimizer = get_optimizer(
@@ -208,11 +267,14 @@ def main():
     )
     
     # Create scheduler
+    scheduler_params = config['training'].get('scheduler_params', {})
+    warmup_epochs = config['training'].get('warmup_epochs', 0)
     scheduler = get_scheduler(
         optimizer,
         scheduler_type=config['training']['scheduler'],
         num_epochs=config['training']['num_epochs'],
-        **config['training'].get('scheduler_params', {})
+        warmup_epochs=warmup_epochs,
+        **scheduler_params
     )
     
     # Create trainer
@@ -227,7 +289,9 @@ def main():
         output_dir=config['output']['output_dir'],
         save_best=config['output']['save_best'],
         save_checkpoints=config['output'].get('save_checkpoints', True),
-        early_stopping_patience=config['training']['early_stopping_patience']
+        early_stopping_patience=config['training']['early_stopping_patience'],
+        gradient_clip_val=config['training'].get('gradient_clip_val', 1.0),
+        use_amp=config['training'].get('use_amp', False)
     )
     
     # Train

@@ -1,4 +1,4 @@
-# Training configuration
+# Training configuration - Optimized for better Dice scores
 
 # Data settings
 data:
@@ -8,7 +8,7 @@ data:
   augmentation: true
   target_size: [96, 96, 96]  # Crop/pad to this size
   modalities: ["flair", "mprage", "pd", "t2"]
-  batch_size: 2  # Adjust based on GPU memory
+  batch_size: 2  # Adjust based on GPU memory (can increase with mixed precision)
   num_workers: 4
   train_split: 0.8  # 80% for training, 20% for validation
 
@@ -19,21 +19,31 @@ model:
 # Training settings
 training:
   num_epochs: 300
-  learning_rate: 0.0001
+  learning_rate: 0.0002  # Slightly higher initial LR
   weight_decay: 0.0001
   optimizer: "adamw"  # "adamw", "adam", or "sgd"
-  scheduler: "plateau"  # "cosine", "plateau", or "step"
+  scheduler: "cosine_warmup"  # "cosine", "cosine_warmup", "plateau", or "step"
+  warmup_epochs: 10  # Warmup for 10 epochs
   scheduler_params:
-    factor: 0.9
-    patience: 10
-  early_stopping_patience: 25
+    T_max: 290  # Cosine annealing after warmup
+    eta_min: 1e-6  # Minimum learning rate
+  early_stopping_patience: 30  # Increased patience
+  gradient_clip_val: 1.0  # Gradient clipping for stability
+  use_amp: true  # Mixed precision training (faster, larger effective batch size)
 
-# Loss function settings
+# Loss function settings - Enhanced combined loss
 loss:
-  type: "combined"  # "dice", "combined", or "focal"
-  dice_weight: 0.5
-  bce_weight: 0.5
+  type: "enhanced"  # "dice", "combined", or "enhanced"
+  dice_weight: 0.3
+  tversky_weight: 0.3
+  bce_weight: 0.2
+  focal_weight: 0.2
   smooth: 1e-5
+  tversky_alpha: 0.7  # Penalize false positives more
+  tversky_beta: 0.3   # Penalize false negatives less
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  compute_class_weights: true  # Automatically compute class weights for imbalanced data
 
 # Output settings
 output:

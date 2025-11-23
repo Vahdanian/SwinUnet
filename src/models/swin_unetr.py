@@ -28,7 +28,10 @@ class SwinUNETRModel(nn.Module):
         img_size: Tuple[int, int, int] = (96, 96, 96),
         feature_size: int = 48,
         use_attention: bool = True,
-        attention_type: str = "cbam"
+        attention_type: str = "cbam",
+        drop_rate: float = 0.1,
+        attn_drop_rate: float = 0.1,
+        dropout_path_rate: float = 0.1
     ):
         """
         Args:
@@ -38,6 +41,9 @@ class SwinUNETRModel(nn.Module):
             feature_size: Feature size for Swin UNETR
             use_attention: Whether to use attention mechanisms
             attention_type: Type of attention ("cbam" or "multiscale")
+            drop_rate: Dropout rate
+            attn_drop_rate: Attention dropout rate
+            dropout_path_rate: Drop path rate for regularization
         """
         super(SwinUNETRModel, self).__init__()
         
@@ -52,9 +58,9 @@ class SwinUNETRModel(nn.Module):
             in_channels=in_channels,
             out_channels=out_channels,
             feature_size=feature_size,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            dropout_path_rate=0.0,
+            drop_rate=drop_rate,
+            attn_drop_rate=attn_drop_rate,
+            dropout_path_rate=dropout_path_rate,
             use_checkpoint=False
         )
         

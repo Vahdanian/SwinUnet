@@ -33,7 +33,9 @@ class Trainer:
         output_dir: str = "outputs",
         save_best: bool = True,
         save_checkpoints: bool = True,
-        early_stopping_patience: int = 10
+        early_stopping_patience: int = 10,
+        gradient_clip_val: float = 1.0,
+        use_amp: bool = False
     ):
         """
         Args:
@@ -56,6 +58,14 @@ class Trainer:
         self.save_best = save_best
         self.save_checkpoints = save_checkpoints
         self.early_stopping_patience = early_stopping_patience
+        self.gradient_clip_val = gradient_clip_val
+        self.use_amp = use_amp and device == "cuda"
+        
+        # Mixed precision scaler
+        if self.use_amp:
+            self.scaler = torch.cuda.amp.GradScaler()
+        else:
+            self.scaler = None
         
         # Setup optimizer
         if optimizer is None:
@@ -101,16 +111,36 @@ class Trainer:
             images = batch['image'].to(self.device)
             masks = batch['mask'].to(self.device)
             
-            # Forward pass
+            # Forward pass with mixed precision
             self.optimizer.zero_grad()
-            outputs = self.model(images)
             
-            # Compute loss
-            loss = self.criterion(outputs, masks)
-            
-            # Backward pass
-            loss.backward()
-            self.optimizer.step()
+            if self.use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, masks)
+                
+                # Backward pass with mixed precision
+                self.scaler.scale(loss).backward()
+                
+                # Gradient clipping
+                if self.gradient_clip_val > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+                
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                outputs = self.model(images)
+                loss = self.criterion(outputs, masks)
+                
+                # Backward pass
+                loss.backward()
+                
+                # Gradient clipping
+                if self.gradient_clip_val > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+                
+                self.optimizer.step()
             
             # Compute metrics
             with torch.no_grad():
@@ -148,11 +178,14 @@ class Trainer:
                 images = batch['image'].to(self.device)
                 masks = batch['mask'].to(self.device)
                 
-                # Forward pass
-                outputs = self.model(images)
-                
-                # Compute loss
-                loss = self.criterion(outputs, masks)
+                # Forward pass with mixed precision if enabled
+                if self.use_amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(images)
+                        loss = self.criterion(outputs, masks)
+                else:
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, masks)
                 
                 # Compute metrics
                 pred_binary = (torch.sigmoid(outputs) > 0.5).float()
