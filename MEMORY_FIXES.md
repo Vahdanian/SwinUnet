@@ -22,11 +22,12 @@
 - **Trade-off**: Slightly lower resolution, but still good for lesion detection
 
 ### 4. **Reduced Feature Size** ✅
-- **Changed**: `feature_size: 48` → `feature_size: 32`
+- **Changed**: `feature_size: 48` → `feature_size: 24`
 - **Impact**: 
-  - Memory reduction: ~33% less in feature maps
+  - Memory reduction: ~50% less in feature maps
   - Model parameters reduced
-- **Trade-off**: Slightly less model capacity, but still sufficient
+- **Trade-off**: Less model capacity, but still sufficient for training
+- **Note**: Must be divisible by 12 (MONAI requirement)
 
 ### 5. **Enabled Gradient Checkpointing** ✅
 - **Added**: `use_gradient_checkpointing: true`
@@ -57,7 +58,7 @@
 ### After:
 - Batch size: 1 (with accumulation)
 - Image size: 64×64×64 = 262,144 voxels (70% reduction)
-- Feature size: 32 (33% reduction)
+- Feature size: 24 (50% reduction)
 - Gradient checkpointing: ON (40-50% memory savings)
 - **Estimated memory**: ~4-6 GB
 
@@ -90,7 +91,7 @@ training:
   use_amp: true
 
 model:
-  feature_size: 32
+  feature_size: 24  # Must be divisible by 12
 ```
 
 ## If Still Getting OOM Errors
@@ -98,7 +99,7 @@ model:
 If you still encounter OOM errors after these changes:
 
 1. **Reduce image size further**: Change to `[48, 48, 48]` or `[32, 32, 32]`
-2. **Reduce feature size further**: Change to `24` or `16`
+2. **Reduce feature size further**: Change to `12` (minimum, must be divisible by 12)
 3. **Increase gradient accumulation**: Change to `16` or `32`
 4. **Disable attention**: Set `use_attention: false` in model config
 5. **Check for memory leaks**: Restart Python kernel before training

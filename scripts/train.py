@@ -176,7 +176,7 @@ def create_loss_function(config: dict, pos_weight: torch.Tensor = None) -> torch
 def main():
     # Set environment variable for better memory management
     import os
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
     
     parser = argparse.ArgumentParser(description='Train MS Lesion Segmentation Model')
     parser.add_argument('--config', type=str, default='config/training_config.yaml',

@@ -5,7 +5,7 @@ model:
   in_channels: 4  # FLAIR, T1, PD, T2
   out_channels: 1  # Binary segmentation
   img_size: [64, 64, 64]  # Input volume size (H, W, D) - reduced for memory
-  feature_size: 32  # Base feature size for Swin UNETR - reduced from 48 to save memory
+  feature_size: 24  # Base feature size for Swin UNETR - reduced from 48 to save memory (must be divisible by 12)
   use_attention: true  # Enable attention mechanisms
   attention_type: "cbam"  # "cbam" or "multiscale"
 
