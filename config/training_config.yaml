@@ -19,14 +19,14 @@ model:
 # Training settings
 training:
   num_epochs: 300
-  learning_rate: 0.0002  # Slightly higher initial LR
+  learning_rate: 0.001  # Increased for faster learning (was 0.0002, too conservative)
   weight_decay: 0.0001
   optimizer: "adamw"  # "adamw", "adam", or "sgd"
   scheduler: "cosine_warmup"  # "cosine", "cosine_warmup", "plateau", or "step"
-  warmup_epochs: 10  # Warmup for 10 epochs
+  warmup_epochs: 5  # Reduced warmup (was 10, less needed with higher LR)
   scheduler_params:
-    T_max: 290  # Cosine annealing after warmup
-    eta_min: 1e-6  # Minimum learning rate
+    T_max: 295  # Cosine annealing after warmup (adjusted for 5 epoch warmup)
+    eta_min: 1e-6  # Minimum learning rate (ensure it's a number, not string)
   early_stopping_patience: 30  # Increased patience
   gradient_clip_val: 1.0  # Gradient clipping for stability
   use_amp: true  # Mixed precision training (faster, larger effective batch size)
@@ -37,13 +37,13 @@ training:
 # Loss function settings - Enhanced combined loss
 loss:
   type: "enhanced"  # "dice", "combined", or "enhanced"
-  dice_weight: 0.3
-  tversky_weight: 0.3
-  bce_weight: 0.2
-  focal_weight: 0.2
+  dice_weight: 0.4  # Increased - more focus on Dice
+  tversky_weight: 0.4  # Increased - more focus on Tversky
+  bce_weight: 0.1  # Reduced - less emphasis on BCE
+  focal_weight: 0.1  # Reduced - less emphasis on Focal
   smooth: 1e-5
-  tversky_alpha: 0.7  # Penalize false positives more
-  tversky_beta: 0.3   # Penalize false negatives less
+  tversky_alpha: 0.6  # Balanced - penalize false positives
+  tversky_beta: 0.5  # Increased - penalize false negatives more (was 0.3, too low)
   focal_alpha: 0.25
   focal_gamma: 2.0
   compute_class_weights: true  # Automatically compute class weights for imbalanced data

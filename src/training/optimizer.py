@@ -101,7 +101,7 @@ def get_scheduler(
     
     if scheduler_type.lower() == "cosine":
         T_max = kwargs.get("T_max", num_epochs)
-        eta_min = kwargs.get("eta_min", 0)
+        eta_min = float(kwargs.get("eta_min", 0))
         main_scheduler = CosineAnnealingLR(
             optimizer,
             T_max=T_max,
@@ -121,7 +121,7 @@ def get_scheduler(
     elif scheduler_type.lower() == "cosine_warmup":
         # Cosine annealing with warmup
         T_max = kwargs.get("T_max", num_epochs - warmup_epochs)
-        eta_min = kwargs.get("eta_min", 0)
+        eta_min = float(kwargs.get("eta_min", 0))
         
         if warmup_epochs > 0:
             warmup_scheduler = get_warmup_scheduler(optimizer, warmup_epochs, base_lr)
