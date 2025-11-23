@@ -155,9 +155,12 @@ class Trainer:
                 
                 self.optimizer.zero_grad()
                 
-                # Clear cache if requested
-                if self.empty_cache and self.device == "cuda":
-                    torch.cuda.empty_cache()
+            # Clear cache more aggressively if requested
+            if self.empty_cache and self.device == "cuda":
+                torch.cuda.empty_cache()
+                # Also synchronize to ensure cleanup
+                if batch_idx % 10 == 0:  # Every 10 batches
+                    torch.cuda.synchronize()
             
             # Compute metrics (use unscaled loss for display)
             with torch.no_grad():
@@ -197,6 +200,11 @@ class Trainer:
             # Clear cache if requested
             if self.empty_cache and self.device == "cuda":
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+        
+        # Final cache clear
+        if self.empty_cache and self.device == "cuda":
+            torch.cuda.empty_cache()
         
         avg_loss = total_loss / num_batches
         avg_dice = total_dice / num_batches

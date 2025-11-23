@@ -31,7 +31,8 @@ class SwinUNETRModel(nn.Module):
         attention_type: str = "cbam",
         drop_rate: float = 0.1,
         attn_drop_rate: float = 0.1,
-        dropout_path_rate: float = 0.1
+        dropout_path_rate: float = 0.1,
+        use_checkpoint: bool = False
     ):
         """
         Args:
@@ -44,6 +45,7 @@ class SwinUNETRModel(nn.Module):
             drop_rate: Dropout rate
             attn_drop_rate: Attention dropout rate
             dropout_path_rate: Drop path rate for regularization
+            use_checkpoint: Enable gradient checkpointing (saves memory, slower)
         """
         super(SwinUNETRModel, self).__init__()
         
@@ -61,7 +63,7 @@ class SwinUNETRModel(nn.Module):
             drop_rate=drop_rate,
             attn_drop_rate=attn_drop_rate,
             dropout_path_rate=dropout_path_rate,
-            use_checkpoint=False
+            use_checkpoint=use_checkpoint
         )
         
         # Add attention mechanisms if enabled

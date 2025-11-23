@@ -6,9 +6,9 @@ data:
   use_preprocessed: true
   normalize: true
   augmentation: true
-  target_size: [96, 96, 96]  # Crop/pad to this size
+  target_size: [64, 64, 64]  # Reduced from 96 to save memory
   modalities: ["flair", "mprage", "pd", "t2"]
-  batch_size: 2  # Adjust based on GPU memory (can increase with mixed precision)
+  batch_size: 1  # Reduced to 1 to save memory (use gradient accumulation for effective batch size)
   num_workers: 4
   train_split: 0.8  # 80% for training, 20% for validation
 
@@ -30,8 +30,9 @@ training:
   early_stopping_patience: 30  # Increased patience
   gradient_clip_val: 1.0  # Gradient clipping for stability
   use_amp: true  # Mixed precision training (faster, larger effective batch size)
-  gradient_accumulation_steps: 2  # Accumulate gradients over N batches (reduces memory, effective batch size = batch_size * gradient_accumulation_steps)
+  gradient_accumulation_steps: 8  # Accumulate gradients over N batches (reduces memory, effective batch size = batch_size * gradient_accumulation_steps = 8)
   empty_cache: true  # Clear CUDA cache between batches (helps with memory fragmentation)
+  use_gradient_checkpointing: true  # Enable gradient checkpointing in model (trades compute for memory)
 
 # Loss function settings - Enhanced combined loss
 loss:

@@ -97,6 +97,7 @@ def create_model(config: dict) -> torch.nn.Module:
     
     model_params = model_config['model']
     swin_params = model_config.get('swin', {})
+    training_config = config.get('training', {})
     
     model = SwinUNETR(
         in_channels=model_params['in_channels'],
@@ -107,7 +108,8 @@ def create_model(config: dict) -> torch.nn.Module:
         attention_type=model_params.get('attention_type', 'cbam'),
         drop_rate=swin_params.get('drop_rate', 0.1),
         attn_drop_rate=swin_params.get('attn_drop_rate', 0.1),
-        dropout_path_rate=swin_params.get('dropout_path_rate', 0.1)
+        dropout_path_rate=swin_params.get('dropout_path_rate', 0.1),
+        use_checkpoint=training_config.get('use_gradient_checkpointing', False)
     )
     
     return model
@@ -172,6 +174,10 @@ def create_loss_function(config: dict, pos_weight: torch.Tensor = None) -> torch
 
 
 def main():
+    # Set environment variable for better memory management
+    import os
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    
     parser = argparse.ArgumentParser(description='Train MS Lesion Segmentation Model')
     parser.add_argument('--config', type=str, default='config/training_config.yaml',
                        help='Path to training configuration file')
