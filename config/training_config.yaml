@@ -30,6 +30,8 @@ training:
   early_stopping_patience: 30  # Increased patience
   gradient_clip_val: 1.0  # Gradient clipping for stability
   use_amp: true  # Mixed precision training (faster, larger effective batch size)
+  gradient_accumulation_steps: 2  # Accumulate gradients over N batches (reduces memory, effective batch size = batch_size * gradient_accumulation_steps)
+  empty_cache: true  # Clear CUDA cache between batches (helps with memory fragmentation)
 
 # Loss function settings - Enhanced combined loss
 loss:

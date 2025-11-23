@@ -35,7 +35,9 @@ class Trainer:
         save_checkpoints: bool = True,
         early_stopping_patience: int = 10,
         gradient_clip_val: float = 1.0,
-        use_amp: bool = False
+        use_amp: bool = False,
+        gradient_accumulation_steps: int = 1,
+        empty_cache: bool = False
     ):
         """
         Args:
@@ -60,6 +62,8 @@ class Trainer:
         self.early_stopping_patience = early_stopping_patience
         self.gradient_clip_val = gradient_clip_val
         self.use_amp = use_amp and device == "cuda"
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.empty_cache = empty_cache
         
         # Mixed precision scaler
         if self.use_amp:
@@ -107,21 +111,73 @@ class Trainer:
         num_batches = 0
         
         pbar = tqdm(self.train_loader, desc="Training")
-        for batch in pbar:
-            images = batch['image'].to(self.device)
-            masks = batch['mask'].to(self.device)
+        self.optimizer.zero_grad()  # Zero gradients at the start
+        
+        for batch_idx, batch in enumerate(pbar):
+            images = batch['image'].to(self.device, non_blocking=True)
+            masks = batch['mask'].to(self.device, non_blocking=True)
             
             # Forward pass with mixed precision
-            self.optimizer.zero_grad()
-            
             if self.use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
                     outputs = self.model(images)
                     loss = self.criterion(outputs, masks)
+                    # Scale loss for gradient accumulation
+                    loss = loss / self.gradient_accumulation_steps
                 
                 # Backward pass with mixed precision
                 self.scaler.scale(loss).backward()
+            else:
+                outputs = self.model(images)
+                loss = self.criterion(outputs, masks)
+                # Scale loss for gradient accumulation
+                loss = loss / self.gradient_accumulation_steps
                 
+                # Backward pass
+                loss.backward()
+            
+            # Update weights only after accumulating gradients
+            if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
+                if self.use_amp:
+                    # Gradient clipping
+                    if self.gradient_clip_val > 0:
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+                    
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    # Gradient clipping
+                    if self.gradient_clip_val > 0:
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
+                    
+                    self.optimizer.step()
+                
+                self.optimizer.zero_grad()
+                
+                # Clear cache if requested
+                if self.empty_cache and self.device == "cuda":
+                    torch.cuda.empty_cache()
+            
+            # Compute metrics (use unscaled loss for display)
+            with torch.no_grad():
+                pred_binary = (torch.sigmoid(outputs) > 0.5).float()
+                dice = dice_score(pred_binary, masks)
+            
+            # Accumulate loss (multiply by accumulation steps to get true loss)
+            total_loss += loss.item() * self.gradient_accumulation_steps
+            total_dice += dice.item()
+            num_batches += 1
+            
+            # Update progress bar
+            pbar.set_postfix({
+                'loss': f'{loss.item() * self.gradient_accumulation_steps:.4f}',
+                'dice': f'{dice.item():.4f}'
+            })
+        
+        # Handle remaining gradients if batch count is not divisible by accumulation steps
+        if num_batches % self.gradient_accumulation_steps != 0:
+            if self.use_amp:
                 # Gradient clipping
                 if self.gradient_clip_val > 0:
                     self.scaler.unscale_(self.optimizer)
@@ -130,32 +186,17 @@ class Trainer:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
-                outputs = self.model(images)
-                loss = self.criterion(outputs, masks)
-                
-                # Backward pass
-                loss.backward()
-                
                 # Gradient clipping
                 if self.gradient_clip_val > 0:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip_val)
                 
                 self.optimizer.step()
             
-            # Compute metrics
-            with torch.no_grad():
-                pred_binary = (torch.sigmoid(outputs) > 0.5).float()
-                dice = dice_score(pred_binary, masks)
+            self.optimizer.zero_grad()
             
-            total_loss += loss.item()
-            total_dice += dice.item()
-            num_batches += 1
-            
-            # Update progress bar
-            pbar.set_postfix({
-                'loss': f'{loss.item():.4f}',
-                'dice': f'{dice.item():.4f}'
-            })
+            # Clear cache if requested
+            if self.empty_cache and self.device == "cuda":
+                torch.cuda.empty_cache()
         
         avg_loss = total_loss / num_batches
         avg_dice = total_dice / num_batches
@@ -175,12 +216,12 @@ class Trainer:
         with torch.no_grad():
             pbar = tqdm(self.val_loader, desc="Validation")
             for batch in pbar:
-                images = batch['image'].to(self.device)
-                masks = batch['mask'].to(self.device)
+                images = batch['image'].to(self.device, non_blocking=True)
+                masks = batch['mask'].to(self.device, non_blocking=True)
                 
                 # Forward pass with mixed precision if enabled
                 if self.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
                         outputs = self.model(images)
                         loss = self.criterion(outputs, masks)
                 else:
@@ -199,6 +240,10 @@ class Trainer:
                     'loss': f'{loss.item():.4f}',
                     'dice': f'{dice.item():.4f}'
                 })
+                
+                # Clear cache if requested
+                if self.empty_cache and self.device == "cuda":
+                    torch.cuda.empty_cache()
         
         avg_loss = total_loss / num_batches
         avg_dice = total_dice / num_batches

@@ -291,7 +291,9 @@ def main():
         save_checkpoints=config['output'].get('save_checkpoints', True),
         early_stopping_patience=config['training']['early_stopping_patience'],
         gradient_clip_val=config['training'].get('gradient_clip_val', 1.0),
-        use_amp=config['training'].get('use_amp', False)
+        use_amp=config['training'].get('use_amp', False),
+        gradient_accumulation_steps=config['training'].get('gradient_accumulation_steps', 1),
+        empty_cache=config['training'].get('empty_cache', False)
     )
     
     # Train
